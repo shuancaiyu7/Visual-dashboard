@@ -140,7 +140,7 @@ async def get_products(
     min_price: Optional[float] = Query(None, description="最低价格"),
     max_price: Optional[float] = Query(None, description="最高价格"),
     sort_by: str = Query("price", description="排序字段: price, comments_count, ratings"),
-    order: str = Query("asc", regex="^(asc|desc)$", description="排序方向"),
+    order: str = Query("asc", pattern="^(asc|desc)$", description="排序方向"),
     limit: int = Query(100, ge=1, le=1000, description="返回数量限制"),
     offset: int = Query(0, ge=0, description="偏移量")
 ):
@@ -187,7 +187,7 @@ async def get_statistics():
         raise HTTPException(status_code=500, detail="Database not initialized")
 
     try:
-        stats = await db_manager.get_statistics()
+        stats = db_manager.get_statistics()
         return StatisticsResponse(**stats)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -231,7 +231,7 @@ async def trigger_crawl(request: CrawlRequest):
 
 @app.get("/api/export", tags=["数据导出"])
 async def export_data(
-    format: str = Query("csv", regex="^(csv|json)$", description="导出格式"),
+    format: str = Query("csv", pattern="^(csv|json)$", description="导出格式"),
     platform: Optional[str] = Query(None, description="平台过滤"),
     category: Optional[str] = Query(None, description="类目过滤")
 ):

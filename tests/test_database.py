@@ -17,9 +17,9 @@ class TestDatabaseManager:
     """测试数据库管理器"""
     
     @pytest.fixture
-    def db(self):
+    def db(self, tmp_path):
         """创建测试数据库实例"""
-        db = DatabaseManager("sqlite:///./data/test_products.db")
+        db = DatabaseManager(f"sqlite:///{tmp_path / 'test_products.db'}")
         yield db
         db.close()
     
@@ -51,6 +51,23 @@ class TestDatabaseManager:
         # 获取商品
         products = asyncio.run(db.get_products(platform="jd", limit=10))
         assert len(products) >= 5
+
+    def test_get_price_matrix_groups_by_platform_and_category(self, db):
+        """测试按平台和类目生成真实均价矩阵"""
+        products = [
+            ProductData(product_id="matrix_jd_phone_1", title="京东手机1", price=100.0, platform="jd", category="手机"),
+            ProductData(product_id="matrix_jd_phone_2", title="京东手机2", price=300.0, platform="jd", category="手机"),
+            ProductData(product_id="matrix_tmall_phone_1", title="天猫手机1", price=500.0, platform="tmall", category="手机"),
+            ProductData(product_id="matrix_jd_watch_1", title="京东手表1", price=800.0, platform="jd", category="手表"),
+        ]
+        for product in products:
+            asyncio.run(db.save_product(product))
+
+        matrix = db.get_price_matrix()
+
+        assert matrix["platforms"] == ["jd", "tmall"]
+        assert matrix["categories"] == ["手机", "手表"]
+        assert matrix["values"] == [[200.0, 500.0], [800.0, None]]
 
 
 import asyncio

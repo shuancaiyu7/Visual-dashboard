@@ -27,6 +27,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from crawler import JDCrawler, TmallCrawler
 from crawler.api_clients import APIClientConfig, OfficialAPIClient
 from crawler.base_crawler import CrawlConfig
+from crawler.scheduler import CrawlScheduler
 from storage.database import DatabaseManager
 from utils.config import get_api_config, get_crawler_config, get_scraping_config, load_config
 from utils.logger import setup_logger
@@ -102,6 +103,50 @@ async def run_crawler_once(platform, category, count=50, config=None):
 
     duration = time.time() - start_time
     print(f"\nTime taken: {duration:.2f}s")
+
+
+def build_scheduler(config, db):
+    scraping_config = get_scraping_config(config)
+    scheduler_config = config['scheduler'] if config.has_section('scheduler') else {}
+    interval_hours = int(scheduler_config.get('interval_hours', 6))
+    crawler_config = build_crawler_config(config)
+
+    scheduler = CrawlScheduler(
+        db_manager=db,
+        categories=scraping_config['categories'],
+        platforms=scraping_config['platforms'],
+        interval_hours=interval_hours,
+    )
+
+    if 'jd' in scraping_config['platforms']:
+        scheduler.register_crawler('jd', JDCrawler(config=crawler_config, api_client=build_api_client('jd', config)))
+    if 'tmall' in scraping_config['platforms']:
+        scheduler.register_crawler('tmall', TmallCrawler(config=crawler_config, api_client=build_api_client('tmall', config)))
+
+    scheduler.setup_tasks()
+    return scheduler
+
+
+async def run_scheduled_crawler():
+    print("\nStarting scheduled crawler mode...")
+    setup_logger()
+    config = load_config()
+    scheduler_config = config['scheduler'] if config.has_section('scheduler') else {}
+    startup_delay = int(scheduler_config.get('startup_delay', 5))
+    db = DatabaseManager()
+    scheduler = build_scheduler(config, db)
+
+    try:
+        scheduler.start(startup_delay=startup_delay)
+        print("Scheduled crawler is running. Press Ctrl+C to stop.")
+        while True:
+            await asyncio.sleep(3600)
+    finally:
+        scheduler.stop()
+        for crawler in scheduler.crawlers.values():
+            await crawler.close()
+        db.close()
+        print("Scheduled crawler stopped.")
 
 
 def run_demo():
@@ -187,7 +232,7 @@ def main():
     if args.mode == 'demo':
         run_demo()
     elif args.mode == 'crawl':
-        print("Running scheduled crawler mode...")
+        asyncio.run(run_scheduled_crawler())
     elif args.mode == 'crawl-once':
         if not args.platform or not args.category:
             print("Error: crawl-once needs --platform and --category")

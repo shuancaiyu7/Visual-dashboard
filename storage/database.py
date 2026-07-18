@@ -218,6 +218,37 @@ class DatabaseManager:
         finally:
             self.close_session(session)
 
+    def get_price_matrix(self):
+        """获取平台和类目的平均价格矩阵，用于可视化热力图。"""
+        session = self.get_session()
+        try:
+            rows = session.query(
+                Product.category,
+                Product.platform,
+                func.avg(Product.price).label('avg_price')
+            ).group_by(Product.category, Product.platform).all()
+
+            categories = sorted({row.category for row in rows})
+            platforms = sorted({row.platform for row in rows})
+            lookup = {
+                (row.category, row.platform): round(float(row.avg_price or 0), 2)
+                for row in rows
+            }
+            values = [
+                [lookup.get((category, platform)) for platform in platforms]
+                for category in categories
+            ]
+            return {
+                'categories': categories,
+                'platforms': platforms,
+                'values': values,
+            }
+        except Exception as e:
+            logger.error(f"Error getting price matrix: {e}")
+            return {'categories': [], 'platforms': [], 'values': []}
+        finally:
+            self.close_session(session)
+
     async def update_category_stats(self, platform: str, category: str):
         session = self.get_session()
         try:

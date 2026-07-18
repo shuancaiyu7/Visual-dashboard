@@ -1,9 +1,8 @@
 # crawler/scheduler.py
-import asyncio
 import logging
 import time
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
@@ -96,22 +95,16 @@ class CrawlScheduler:
         """启动调度器"""
         self._running = True
         if startup_delay > 0:
-            logger.info(f"Starting scheduler with {startup_delay}s delay...")
+            logger.info(f"Starting scheduler and scheduling first crawl after {startup_delay}s...")
             self.scheduler.add_job(
-                self._delayed_start,
+                self.run_all,
                 trigger='date',
-                args=[startup_delay],
-                id='delayed_start',
+                run_date=datetime.now() + timedelta(seconds=startup_delay),
+                id='startup_crawl',
                 replace_existing=True
             )
-        else:
-            self.scheduler.start()
-            logger.info("Scheduler started immediately")
-
-    async def _delayed_start(self, delay_seconds: int):
-        await asyncio.sleep(delay_seconds)
         self.scheduler.start()
-        logger.info("Scheduler started!")
+        logger.info("Scheduler started")
 
     def stop(self):
         self._running = False
